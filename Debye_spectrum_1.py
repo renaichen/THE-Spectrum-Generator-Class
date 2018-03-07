@@ -2,7 +2,7 @@ import numpy as np
 from scipy.integrate import odeint
 import random
 import matplotlib.pyplot as plt
-from scipy.fftpack import fft
+from scipy.fftpack import fft, ifft
 
 
 class Generator(object):
@@ -68,13 +68,29 @@ class Generator(object):
             # so the following x[..., i] should be treated differently than x[..., i-1], although they appear the same
 
             for i in range(self.n / 2, 0, -1):
+                # x[tstep + 1, i - 1] = x[tstep, i - 1] + v[tstep, i - 1] * self.dt
                 x[tstep + 1, i - 1] = x[tstep, i - 1] + v[tstep, i - 1] * self.dt
+                # x[tstep + 1, i - 1] = np.exp(-1. / 5000 * self.t[tstep + 1]) * x[tstep + 1, i - 1]
                 # v[tstep + 1, i - 1] = v[tstep, i - 1] + self.omegaD ** 2 * \
                 #                         (x[tstep, i] - x[tstep, i - 1] -
                 #                             2 * self._bp[i - 1] / self.omegaD * v[tstep, i - 1]) * self.dt
+
                 v[tstep + 1, i - 1] = v[tstep, i - 1] + self.omegaD ** 2 * \
-                                                        (x[tstep, i]/np.sqrt(self.dt) - x[tstep, i - 1] -
+                                                        (x[tstep, i] / np.sqrt(self.dt) - x[tstep, i - 1] -
                                                          2 * self._bp[i - 1] / self.omegaD * v[tstep, i - 1]) * self.dt
+
+                # if i == self.n / 2:
+                #     v[tstep + 1, i - 1] = v[tstep, i - 1] + self.omegaD ** 2 * \
+                #                                         (x[tstep, i]/np.sqrt(self.dt) - x[tstep, i - 1] -
+                #                                          2 * self._bp[i - 1] / self.omegaD * v[tstep, i - 1]) * self.dt
+                # else:
+                #     v[tstep + 1, i - 1] = v[tstep, i - 1] + self.omegaD ** 2 * \
+                #                                         (x[tstep, i] - x[tstep, i - 1] -
+                #                                         2 * self._bp[i - 1] / self.omegaD * v[tstep, i - 1]) * self.dt
+
+
+                # v[tstep + 1, i - 1] = np.exp(-1./6000*self.t[tstep+1])*v[tstep+1, i - 1]
+
             tstep += 1
 
     def random_evolve_vv(self, x, v):
@@ -100,6 +116,8 @@ class Generator(object):
                 v[tstep + 1, i - 1] = v[tstep, i - 1] + 0.5 * (a[tstep, i - 1] + a[tstep + 1, i - 1]) * self.dt \
                                       - 2 * self._bp[i - 1] * self.omegaD * v[tstep, i - 1] * self.dt \
                                       + self.omegaD ** 2 * x[tstep, i] * np.sqrt(self.dt)
+                # v[tstep + 1, i - 1] = np.exp(-1. / 12000 * self.t[tstep + 1]) * v[tstep + 1, i - 1]
+
             tstep += 1
 
 
@@ -124,8 +142,10 @@ class Generator(object):
 
                 self.R_traj[:, traj] = zz[self.t_num - sampling :, 0]
                 # self.R_traj[:, traj] = zz[self.t_num / 2:, self.n/2]
+                # self.R_traj[:, traj] = zz[self.t_num - sampling:, 1]
                 self.R_length[:] += zz[:, 0]
                 # self.R_length[:] += zz[:, self.n/2]
+                # self.R_length[:] += zz[:, 1]
                 print traj
                 traj += 1
 
@@ -140,10 +160,10 @@ class Generator(object):
 
 
 
-omegaD = 2
-t_num = 8000
-dt = 0.02
-Ntraj = 100
+omegaD = 10
+t_num = 50000
+dt = 0.001
+Ntraj = 1000
 sampling = 2
 points = 25
 omegagrid = np.linspace(0.0, 2*omegaD, points)
@@ -191,27 +211,44 @@ n8 = Generator(n=8,
 # print
 # print test.Raver
 
-n2.random_mult_traj()
-print
-print n2.Raver
-n4.random_mult_traj()
-print
-print n4.Raver
-n6.random_mult_traj()
-print
-print n6.Raver
+# n2.random_mult_traj()
+# print
+# print n2.Raver
+# n4.random_mult_traj()
+# print
+# print n4.Raver
+# n6.random_mult_traj()
+# print
+# print n6.Raver
 n8.random_mult_traj()
 print
 print n8.Raver
 
 
+# def generate_autocorrelation(seq):
+#     length = len(seq)
+#     correlation = np.zeros(length)
+#     for i in range(length):
+#         seq_shift = np.roll(seq, i)
+#         seq_shift[:i] = np.zeros(i)
+#         correlation[i] = np.dot(seq, seq_shift) / float(length - i)
+#
+#     return correlation
+
 def generate_autocorrelation(seq):
-    length = len(seq)
+    n = len(seq)
+    if n % 2 == 0:
+        length = n // 2
+    else:
+        length = n // 2 + 1
+        seq = np.append(seq, 0.)
+
     correlation = np.zeros(length)
     for i in range(length):
         seq_shift = np.roll(seq, i)
         seq_shift[:i] = np.zeros(i)
-        correlation[i] = np.dot(seq, seq_shift) / float(length - i)
+        seq_shift[i+length:] = np.zeros(length-i)
+        correlation[i] = np.dot(seq, seq_shift) / float(length)
 
     return correlation
 
@@ -262,32 +299,38 @@ def fourier_generic(ft, deltat, omegaD, points):
 
 # tf, yf = fourier_transform(cor, test.dt)
 
-cor_n2 = np.zeros(n2.sampling)
-for j in range(Ntraj):
-    cor_n2 += generate_autocorrelation(n2.R_traj[:, j])
-cor_n2 /= Ntraj
+# cor_n2 = np.zeros(n2.sampling)
+# cor_n2 = np.zeros(n2.sampling/2)
+# for j in range(Ntraj):
+#     cor_n2 += generate_autocorrelation(n2.R_traj[:, j])
+# cor_n2 /= Ntraj
+
+# cor_n4 = np.zeros(n4.sampling)
+# cor_n4 = np.zeros(n4.sampling/2)
+# for j in range(Ntraj):
+#     cor_n4 += generate_autocorrelation(n4.R_traj[:, j])
+# cor_n4 /= Ntraj
 #
-cor_n4 = np.zeros(n4.sampling)
-for j in range(Ntraj):
-    cor_n4 += generate_autocorrelation(n4.R_traj[:, j])
-cor_n4 /= Ntraj
-#
-cor_n6 = np.zeros(n6.sampling)
-for j in range(Ntraj):
-    cor_n6 += generate_autocorrelation(n6.R_traj[:, j])
-cor_n6 /= Ntraj
-#
-cor_n8 = np.zeros(n8.sampling)
+# cor_n6 = np.zeros(n6.sampling)
+# cor_n6 = np.zeros(n6.sampling/2)
+# for j in range(Ntraj):
+#     cor_n6 += generate_autocorrelation(n6.R_traj[:, j])
+# cor_n6 /= Ntraj
+
+# cor_n8 = np.zeros(n8.sampling)
+cor_n8 = np.zeros(n8.sampling/2)
 for j in range(Ntraj):
     cor_n8 += generate_autocorrelation(n8.R_traj[:, j])
 cor_n8 /= Ntraj
 
 
 #----get the first half of the correlation
-# cor_n2 = cor_n2[: n2.sampling//2]
+# cor_n2 = cor_n2[: n2.sampling//4]
 # cor_n4 = cor_n4[: n4.sampling//2]
 # cor_n6 = cor_n6[: n6.sampling//2]
-# cor_n8 = cor_n8[: n8.sampling//2]
+
+# cor_n8 = cor_n8[: n8.sampling//4]
+# np.savetxt('test.txt',cor_n8)
 
 
 # tfn2 = np.zeros(t_num//(2*sampling))
@@ -327,9 +370,9 @@ cor_n8 /= Ntraj
 # yfn8 /= Ntraj
 
 
-tfn2, yfn2 = fourier_transform(cor_n2, n2.dt)
-tfn4, yfn4 = fourier_transform(cor_n4, n4.dt)
-tfn6, yfn6 = fourier_transform(cor_n6, n6.dt)
+# tfn2, yfn2 = fourier_transform(cor_n2, n2.dt)
+# tfn4, yfn4 = fourier_transform(cor_n4, n4.dt)
+# tfn6, yfn6 = fourier_transform(cor_n6, n6.dt)
 tfn8, yfn8 = fourier_transform(cor_n8, n8.dt)
 
 
@@ -348,22 +391,27 @@ tfn8, yfn8 = fourier_transform(cor_n8, n8.dt)
 
 
 # plt.figure()
-# plt.plot(n2.t[: n2.sampling // 2], cor_n2, label='n2')
+# plt.plot(n2.t[: n2.sampling // 4], cor_n2, label='n2')
 # plt.figure()
 # plt.plot(n4.t[: n4.sampling // 2], cor_n4, label='n4')
 # plt.figure()
 # plt.plot(n6.t[: n6.sampling // 2], cor_n6, label='n6')
 # plt.figure()
-# plt.plot(n8.t[: n8.sampling // 2], cor_n8, label='n8')
+# plt.plot(n8.t[: n8.sampling // 4], cor_n8, label='n8')
 
+# plt.figure()
+# # plt.plot(n2.t[: n2.sampling], cor_n2, label='n2')
+# plt.plot(cor_n2, label='n2')
+# plt.figure()
+# # plt.plot(n4.t[: n4.sampling], cor_n4, label='n4')
+# plt.plot(cor_n4, label='n4')
+# plt.figure()
+# # plt.plot(n6.t[: n6.sampling], cor_n6, label='n6')
+# plt.plot(cor_n6, label='n6')
 plt.figure()
-plt.plot(n2.t[: n2.sampling], cor_n2, label='n2')
-plt.figure()
-plt.plot(n4.t[: n4.sampling], cor_n4, label='n4')
-plt.figure()
-plt.plot(n6.t[: n6.sampling], cor_n6, label='n6')
-plt.figure()
-plt.plot(n8.t[: n8.sampling], cor_n8, label='n8')
+# plt.plot(n8.t[: n8.sampling], cor_n8, label='n8')
+plt.plot(cor_n8, label='n8')
+plt.legend()
 
 plt.figure()
 # plt.plot(omegagrid, yfn2, 'o-', label='n2')
@@ -374,10 +422,11 @@ plt.figure()
 # plt.plot(yfn4, label='n4')
 # plt.plot(yfn6, label='n6')
 # plt.plot(yfn8[: 100], label='n8')
-plt.plot(tfn2, yfn2, label='n2')
-plt.plot(tfn4, yfn4, label='n4')
-plt.plot(tfn6, yfn6, label='n6')
-plt.plot(tfn8, yfn8, label='n8')
+# plt.plot(tfn2, yfn2, 'o-', label='n2')
+# plt.plot(tfn4, yfn4, 'o-', label='n4')
+# plt.plot(tfn6, yfn6, 'o-', label='n6')
+plt.plot(tfn8, yfn8, 'o-', label='n8')
+plt.plot(tfn8, 1/(1+(tfn8/omegaD)**16), label='analytical:n=8')
 # plt.figure()
 # plt.plot(test.t[test.t_num / 4 :], test.R_halflength)
 plt.legend()
