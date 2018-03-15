@@ -6,18 +6,34 @@ import time
 import numpy as np
 import math
 import random
+import matplotlib.pyplot as plt
+import Debye_spectrum_3 as ds
+
 pathname = os.path.dirname(sys.argv[0])
 fullpath = os.path.abspath(pathname)
 #=============================================================================================================
 start_time = time.time()
+
+##############Deybe spectrum parameters############
+omegaD1 = 2 # 1 rad/time_unit = 20.454 rad/ps = 2.0454e13 rad/s, Gold has 4.92e13 rad/s
+## (most metals within range of 1-10e13 rad/s: https://lampx.tugraz.at/~hadley/ss1/phonons/table/dosdebye.htm)
+t_num1 = 20000 # time points to sample the random positions
+dt1 = 0.01 # this time step must be larger and integer times of the MD timestep
+Ntraj1 = 1 # this trajectory number is for better sampling
+temperature1 = 0.0
+sampling1 = 2 # most of the time leave this value to be 2, meaning discard first half of each trajectory
+#--------------------------------------------------
+#----------Just take the c-c L-J parameters for Au-C, because the actually one is not found---------------
+epsilonbath1 = 2.0
+sigmabath1 = 1.6
 #################time parameters###########################
 tBegin=0
-tEnd=0.30 #1 = 48.88882 fs  #simulation time
-dt=	0.001 #0.01 = 0.488882 fs #timestep size
+dt=	0.01 #0.01 = 0.488882 fs #timestep size
+tEnd = int(t_num1 / 2 * dt)
 sqrtdt = np.sqrt(dt)
 t = np.arange(tBegin, tEnd, dt)
 tsize = t.size 
-numoftraj = 20 #number of traj
+numoftraj = 1 #number of traj
 #################units###########################
 mH = 1.008 #[g/mol]
 mC = 12.011 #[g/mol]
@@ -52,7 +68,7 @@ TrajOutputRate = 10 #10 if 0.001
 
 
 #import molecular geometry
-molfile = "/Benzene-ring.pdb"
+molfile = "/c2h6-python.pdb"
 
 # how many atoms?
 N = 0
@@ -96,6 +112,7 @@ Qtotalcum = np.zeros(tsize+1)
 DeltaEarraycum = np.zeros(tsize+1)
 neighbors = np.zeros((N,N),dtype=int)
 neighbors.fill(-1)
+
 
 #############make list of atomtypes##################
 for line in open(os.path.abspath(pathname)+molfile): 
@@ -271,6 +288,12 @@ Lterm = 0
 Lterminaleq[0] = xold[Lterm]
 Lterminaleq[1] = yold[Lterm]
 Lterminaleq[2] = zold[Lterm]
+
+##########setting initial positions for baths#########
+bathpositioneq1 = np.zeros(3)
+bathpositioneq1[0] = xold[Lterm] - 5
+bathpositioneq1[1] = yold[Lterm] - 5
+bathpositioneq1[2] = zold[Lterm] - 5
 
 #findlastcarbon
 
@@ -950,7 +973,7 @@ def Temperature(vxarg,vyarg,vzarg,timestep):
 	return T
 
 ##############################Main Program##################################
-traj = 0; 
+traj = 0
 while traj<numoftraj:
 	Q = 0
 	stepcounter=1
@@ -982,18 +1005,36 @@ while traj<numoftraj:
 	###
 
 	
+##########instantiate the Spectrum generator instances#############
+	bath_object1 = ds.Generator(n=8,
+								omegaD=omegaD1,
+								mass=mAu,
+								temperature=temperature1,
+								dt=dt1,
+								t_num=t_num1,
+								Ntraj=Ntraj1,
+								sampling_rate=sampling1,)
 
-	
+	rand_array1x = bath_object1.give_me_random_series(dt)
+	rand_array1y = bath_object1.give_me_random_series(dt)
+	rand_array1z = bath_object1.give_me_random_series(dt)
+	bathposition1x = np.zeros(tsize+1)
+	bathposition1y = np.zeros(tsize+1)
+	bathposition1z = np.zeros(tsize+1)
+	damper1x = np.zeros(tsize+1)
+	damper1y = np.zeros(tsize+1)
+	damper1z = np.zeros(tsize+1)
+
 	##############setting intital velocites and removing linear momentum##############################
 	px = 0; py = 0;	pz = 0
 	i = 0
 	while i<N:
-		vxold[i] = np.sqrt(kb*Teff/mass[i])*np.random.normal(0,1)
-		vyold[i] = np.sqrt(kb*Teff/mass[i])*np.random.normal(0,1)
-		vzold[i] = np.sqrt(kb*Teff/mass[i])*np.random.normal(0,1)
-		#vxold[i] = 0.
-		#vyold[i] = 0.
-		#vzold[i] = 0.
+	#	vxold[i] = np.sqrt(kb*Teff/mass[i])*np.random.normal(0,1)
+	#	vyold[i] = np.sqrt(kb*Teff/mass[i])*np.random.normal(0,1)
+	#	vzold[i] = np.sqrt(kb*Teff/mass[i])*np.random.normal(0,1)
+		vxold[i] = 0.0
+		vyold[i] = 0.0
+		vzold[i] = 0.1
 		px+=mass[i]*vxold[i]
 		py+=mass[i]*vyold[i]
 		pz+=mass[i]*vzold[i]
@@ -1014,7 +1055,11 @@ while traj<numoftraj:
 	Forces(xold,yold,zold,fxold,fyold,fzold)
 	Energyarraytotal[0] =Energy(xold,yold,zold,vxold,vyold,vzold)
 	Energyarray[0] +=Energy(xold,yold,zold,vxold,vyold,vzold)
-	
+
+	fbath1x = 0.0
+	fbath1y = 0.0
+	fbath1z = 0.0
+
 	timestep = 0
 	while timestep<tsize:
 		#print timestep
@@ -1054,77 +1099,9 @@ while traj<numoftraj:
 		while i<N:	
 			if dynamics == 'Noneq':
 				#######for temperature gradient
-				if Lterm != Rterm:
-					if i==Lterm:
-						chixL = random.gauss(0,1)
-						chiyL = random.gauss(0,1)
-						chizL = random.gauss(0,1)	
-						etaxL = random.gauss(0,1)
-						etayL = random.gauss(0,1)
-						etazL = random.gauss(0,1)	
-					
-						AxL = 0.5*(fxold[i]/mass[i]-gammaL*vxold[i])*dt*dt + np.sqrt(2.0*kb*gammaL*TL*mass[i]**(-1.))*(dt**1.5)*(0.5*chixL+1/(2.*np.sqrt(3))*etaxL)
-						AyL = 0.5*(fyold[i]/mass[i]-gammaL*vyold[i])*dt*dt + np.sqrt(2.0*kb*gammaL*TL*mass[i]**(-1.))*(dt**1.5)*(0.5*chiyL+1/(2.*np.sqrt(3))*etayL)				
-						AzL = 0.5*(fzold[i]/mass[i]-gammaL*vzold[i])*dt*dt + np.sqrt(2.0*kb*gammaL*TL*mass[i]**(-1.))*(dt**1.5)*(0.5*chizL+1/(2.*np.sqrt(3))*etazL)
-					
-						xnew[i] = xold[i] + vxold[i]*dt+AxL
-						ynew[i] = yold[i] + vyold[i]*dt+AyL
-						znew[i] = zold[i] + vzold[i]*dt+AzL	
-					
-					
-					elif i==Rterm:
-						chixR = random.gauss(0,1)
-						chiyR = random.gauss(0,1)
-						chizR = random.gauss(0,1)	
-						etaxR = random.gauss(0,1)
-						etayR = random.gauss(0,1)
-						etazR = random.gauss(0,1)
-						
-						AxR = 0.5*(fxold[i]/mass[i]-gammaR*vxold[i])*dt*dt + np.sqrt(2.0*kb*gammaR*TR*mass[i]**(-1.))*(dt**1.5)*(0.5*chixR+1/(2.*np.sqrt(3))*etaxR)
-						AyR = 0.5*(fyold[i]/mass[i]-gammaR*vyold[i])*dt*dt + np.sqrt(2.0*kb*gammaR*TR*mass[i]**(-1.))*(dt**1.5)*(0.5*chiyR+1/(2.*np.sqrt(3))*etayR)				
-						AzR = 0.5*(fzold[i]/mass[i]-gammaR*vzold[i])*dt*dt + np.sqrt(2.0*kb*gammaR*TR*mass[i]**(-1.))*(dt**1.5)*(0.5*chizR+1/(2.*np.sqrt(3))*etazR)				
-					
-						xnew[i] = xold[i] + vxold[i]*dt+AxR
-						ynew[i] = yold[i] + vyold[i]*dt+AyR
-						znew[i] = zold[i] + vzold[i]*dt+AzR	
-					else:
-						xnew[i] = xold[i] + vxold[i]*dt+0.5*(fxold[i]/mass[i])*dt*dt
-						ynew[i] = yold[i] + vyold[i]*dt+0.5*(fyold[i]/mass[i])*dt*dt
-						znew[i] = zold[i] + vzold[i]*dt+0.5*(fzold[i]/mass[i])*dt*dt
-				
-				if Lterm == Rterm: ###this means that you are either simulating methane or another single carbon structure
-					if i==Lterm:
-						chixL = random.gauss(0,1)
-						chiyL = random.gauss(0,1)
-						chizL = random.gauss(0,1)	
-						etaxL = random.gauss(0,1)
-						etayL = random.gauss(0,1)
-						etazL = random.gauss(0,1)	
-						
-						chixR = random.gauss(0,1)
-						chiyR = random.gauss(0,1)
-						chizR = random.gauss(0,1)	
-						etaxR = random.gauss(0,1)
-						etayR = random.gauss(0,1)
-						etazR = random.gauss(0,1)
-					
-						AxL = 0.5*(fxold[i]/mass[i]-gammaL*vxold[i])*dt*dt + np.sqrt(2.0*kb*gammaL*TL*mass[i]**(-1.))*(dt**1.5)*(0.5*chixL+1/(2.*np.sqrt(3))*etaxL)
-						AyL = 0.5*(fyold[i]/mass[i]-gammaL*vyold[i])*dt*dt + np.sqrt(2.0*kb*gammaL*TL*mass[i]**(-1.))*(dt**1.5)*(0.5*chiyL+1/(2.*np.sqrt(3))*etayL)				
-						AzL = 0.5*(fzold[i]/mass[i]-gammaL*vzold[i])*dt*dt + np.sqrt(2.0*kb*gammaL*TL*mass[i]**(-1.))*(dt**1.5)*(0.5*chizL+1/(2.*np.sqrt(3))*etazL)
-						
-						AxR = 0.5*(-gammaR*vxold[i])*dt*dt + np.sqrt(2.0*kb*gammaR*TR*mass[i]**(-1.))*(dt**1.5)*(0.5*chixR+1/(2.*np.sqrt(3))*etaxR)
-						AyR = 0.5*(-gammaR*vyold[i])*dt*dt + np.sqrt(2.0*kb*gammaR*TR*mass[i]**(-1.))*(dt**1.5)*(0.5*chiyR+1/(2.*np.sqrt(3))*etayR)				
-						AzR = 0.5*(-gammaR*vzold[i])*dt*dt + np.sqrt(2.0*kb*gammaR*TR*mass[i]**(-1.))*(dt**1.5)*(0.5*chizR+1/(2.*np.sqrt(3))*etazR)
-					
-						xnew[i] = xold[i] + vxold[i]*dt+(AxL+AxR)
-						ynew[i] = yold[i] + vyold[i]*dt+(AyL+AyR)
-						znew[i] = zold[i] + vzold[i]*dt+(AzL+AzR)
-					
-					else:
-						xnew[i] = xold[i] + vxold[i]*dt+0.5*(fxold[i]/mass[i])*dt*dt
-						ynew[i] = yold[i] + vyold[i]*dt+0.5*(fyold[i]/mass[i])*dt*dt
-						znew[i] = zold[i] + vzold[i]*dt+0.5*(fzold[i]/mass[i])*dt*dt		
-
+                                xnew[i] = xold[i] + vxold[i]*dt+0.5*(fxold[i]/mass[i])*dt*dt
+				ynew[i] = yold[i] + vyold[i]*dt+0.5*(fyold[i]/mass[i])*dt*dt
+				znew[i] = zold[i] + vzold[i]*dt+0.5*(fzold[i]/mass[i])*dt*dt
 			if dynamics == 'NVT':
 				####for equilibrium NVT dynamics
 				chix[i] = random.gauss(0,1)
@@ -1150,39 +1127,61 @@ while traj<numoftraj:
 			i+=1
 
 		Forces(xnew,ynew,znew,fxnew,fynew,fznew)
-		
+
+		damper1x[timestep] = bath_object1.damp_getter(-fbath1x)
+		damper1y[timestep] = bath_object1.damp_getter(-fbath1y)
+		damper1z[timestep] = bath_object1.damp_getter(-fbath1z)
+
+		bathposition1x[timestep] = bathpositioneq1[0] + damper1x[timestep] + rand_array1x[timestep]
+		bathposition1y[timestep] = bathpositioneq1[1] + damper1y[timestep] + rand_array1y[timestep]
+		bathposition1z[timestep] = bathpositioneq1[2] + damper1z[timestep] + rand_array1z[timestep]
+
+		xLJ = xnew[Lterm]-bathposition1x[timestep]
+		yLJ = ynew[Lterm]-bathposition1y[timestep]
+		zLJ = znew[Lterm]-bathposition1z[timestep]
+		rLJ = np.sqrt(xLJ**2 + yLJ**2 + zLJ**2)
+
+		# fbath1x = 48 * epsilonbath1 * sigmabath1**12 / (xnew[Lterm]-bathposition1x[timestep])**13 - 24 * epsilonbath1 * sigmabath1**6 / (xnew[Lterm]-bathposition1x[timestep])**7
+		# fbath1y = 48 * epsilonbath1 * sigmabath1**12 / (ynew[Lterm]-bathposition1y[timestep])**13 - 24 * epsilonbath1 * sigmabath1**6 / (ynew[Lterm]-bathposition1y[timestep])**7
+		# fbath1z = 48 * epsilonbath1 * sigmabath1**12 / (znew[Lterm]-bathposition1z[timestep])**13 - 24 * epsilonbath1 * sigmabath1**6 / (znew[Lterm]-bathposition1z[timestep])**7
+
+		fbath1 = -100.0 * (rLJ-6.0)
+		# fbath1 = 48 * epsilonbath1 * sigmabath1 ** 12 / rLJ ** 13 - 24 * epsilonbath1 * sigmabath1 ** 6 / rLJ ** 7
+		fbath1x = fbath1 * xLJ/rLJ
+		fbath1y = fbath1 * yLJ/rLJ
+		fbath1z = fbath1 * zLJ/rLJ
+
+		# fbath1x = -200 * (xnew[Lterm]-bathposition1x[timestep]-2.0)
+		# fbath1y = 1
+		# fbath1z = 1
+
 		i = 0
 		while i<N:
 			if dynamics == 'Noneq':
 				if Lterm != Rterm:
 					if i==Lterm:
-						vxnew[i] = vxold[i] + 0.5*(fxold[i]/mass[i]+fxnew[i]/mass[i])*dt -gammaL*vxold[i]*dt+sqrtdt*np.sqrt(2.0*kb*gammaL*TL*mass[i]**(-1.))*chixL-gammaL*AxL
-						vynew[i] = vyold[i] + 0.5*(fyold[i]/mass[i]+fynew[i]/mass[i])*dt -gammaL*vyold[i]*dt+sqrtdt*np.sqrt(2.0*kb*gammaL*TL*mass[i]**(-1.))*chiyL-gammaL*AyL
-						vznew[i] = vzold[i] + 0.5*(fzold[i]/mass[i]+fznew[i]/mass[i])*dt -gammaL*vzold[i]*dt+sqrtdt*np.sqrt(2.0*kb*gammaL*TL*mass[i]**(-1.))*chizL-gammaL*AzL					
+						fxnew[i] += fbath1x
+						fynew[i] += fbath1y
+						fznew[i] += fbath1z
+
 					elif i==Rterm:#############must change from elif to if for carbon or methane                  
-						vxnew[i] = vxold[i] + 0.5*(fxold[i]/mass[i]+fxnew[i]/mass[i])*dt -gammaR*vxold[i]*dt+sqrtdt*np.sqrt(2.0*kb*gammaR*TR*mass[i]**(-1.))*chixR-gammaR*AxR
-						vynew[i] = vyold[i] + 0.5*(fyold[i]/mass[i]+fynew[i]/mass[i])*dt -gammaR*vyold[i]*dt+sqrtdt*np.sqrt(2.0*kb*gammaR*TR*mass[i]**(-1.))*chiyR-gammaR*AyR
-						vznew[i] = vzold[i] + 0.5*(fzold[i]/mass[i]+fznew[i]/mass[i])*dt -gammaR*vzold[i]*dt+sqrtdt*np.sqrt(2.0*kb*gammaR*TR*mass[i]**(-1.))*chizR-gammaR*AzR						
+						pass
 					else:		
-						vxnew[i] = vxold[i] + 0.5*((fxold[i]+fxnew[i])/mass[i])*dt 
-						vynew[i] = vyold[i] + 0.5*((fyold[i]+fynew[i])/mass[i])*dt 
-						vznew[i] = vzold[i] + 0.5*((fzold[i]+fznew[i])/mass[i])*dt 
+						pass
 					
 					
 				if Lterm == Rterm:	###this means that you are either simulating methane or another single carbon structure
 					if i==Lterm:
-						vxnew[i] = vxold[i] + 0.5*(fxold[i]/mass[i]+fxnew[i]/mass[i])*dt -gammaL*vxold[i]*dt+sqrtdt*np.sqrt(2.0*kb*gammaL*TL*mass[i]**(-1.))*chixL-gammaL*AxL
-						vynew[i] = vyold[i] + 0.5*(fyold[i]/mass[i]+fynew[i]/mass[i])*dt -gammaL*vyold[i]*dt+sqrtdt*np.sqrt(2.0*kb*gammaL*TL*mass[i]**(-1.))*chiyL-gammaL*AyL
-						vznew[i] = vzold[i] + 0.5*(fzold[i]/mass[i]+fznew[i]/mass[i])*dt -gammaL*vzold[i]*dt+sqrtdt*np.sqrt(2.0*kb*gammaL*TL*mass[i]**(-1.))*chizL-gammaL*AzL					
-				
-						vxnew[i] +=  -gammaR*vxold[i]*dt+sqrtdt*np.sqrt(2.0*kb*gammaR*TR*mass[i]**(-1.))*chixR-gammaR*AxR
-						vynew[i] +=  -gammaR*vyold[i]*dt+sqrtdt*np.sqrt(2.0*kb*gammaR*TR*mass[i]**(-1.))*chiyR-gammaR*AyR
-						vznew[i] +=  -gammaR*vzold[i]*dt+sqrtdt*np.sqrt(2.0*kb*gammaR*TR*mass[i]**(-1.))*chizR-gammaR*AzR						
+						pass
+                                            
 					else:		
-						vxnew[i] = vxold[i] + 0.5*((fxold[i]+fxnew[i])/mass[i])*dt 
-						vynew[i] = vyold[i] + 0.5*((fyold[i]+fynew[i])/mass[i])*dt 
-						vznew[i] = vzold[i] + 0.5*((fzold[i]+fznew[i])/mass[i])*dt 						
-			
+						pass
+                                
+				vxnew[i] = vxold[i] + 0.5*((fxold[i]+fxnew[i])/mass[i])*dt
+				vynew[i] = vyold[i] + 0.5*((fyold[i]+fynew[i])/mass[i])*dt 
+				vznew[i] = vzold[i] + 0.5*((fzold[i]+fznew[i])/mass[i])*dt 						
+
+
 			if dynamics == 'NVT':						
 			
 				vxnew[i] = vxold[i] + 0.5*(fxold[i]/mass[i]+fxnew[i]/mass[i])*dt -gamma*vxold[i]*dt+sqrtdt*np.sqrt(2.0*kb*gamma*Teff*mass[i]**(-1.))*chix[i]-gamma*Ax[i]
@@ -1231,37 +1230,37 @@ while traj<numoftraj:
 			#print 'heat', Q,  'Delta E', Energyarray[timestep+1]-Energyarray[timestep]
 			print traj, timestep, Q,  'Delta E', DeltaE	
 
-		if dynamics == 'Noneq':	
-			#Q = 0
-			i=Lterm
-			QL[timestep+1] += -(mass[i]*0.5*(vxnew[i]+vxold[i])*(math.sqrt(2.0*kb*TL*gammaL*mass[i]**(-1))*sqrtdt*chixL - gammaL*(xnew[i]-xold[i])))
-			QL[timestep+1] += -(mass[i]*0.5*(vynew[i]+vyold[i])*(math.sqrt(2.0*kb*TL*gammaL*mass[i]**(-1))*sqrtdt*chiyL - gammaL*(ynew[i]-yold[i])))
-			QL[timestep+1] += -(mass[i]*0.5*(vznew[i]+vzold[i])*(math.sqrt(2.0*kb*TL*gammaL*mass[i]**(-1))*sqrtdt*chizL - gammaL*(znew[i]-zold[i])))	
-			Q += -(mass[i]*0.5*(vxnew[i]+vxold[i])*(math.sqrt(2.0*kb*TL*gammaL*mass[i]**(-1))*sqrtdt*chixL - gammaL*(xnew[i]-xold[i])))
-			Q += -(mass[i]*0.5*(vynew[i]+vyold[i])*(math.sqrt(2.0*kb*TL*gammaL*mass[i]**(-1))*sqrtdt*chiyL - gammaL*(ynew[i]-yold[i])))
-			Q += -(mass[i]*0.5*(vznew[i]+vzold[i])*(math.sqrt(2.0*kb*TL*gammaL*mass[i]**(-1))*sqrtdt*chizL - gammaL*(znew[i]-zold[i])))				
-	
-			i=Rterm
-			QR[timestep+1] += -(mass[i]*0.5*(vxnew[i]+vxold[i])*(math.sqrt(2.0*kb*TR*gammaR*mass[i]**(-1))*sqrtdt*chixR - gammaR*(xnew[i]-xold[i])))
-			QR[timestep+1] += -(mass[i]*0.5*(vynew[i]+vyold[i])*(math.sqrt(2.0*kb*TR*gammaR*mass[i]**(-1))*sqrtdt*chiyR - gammaR*(ynew[i]-yold[i])))
-			QR[timestep+1] += -(mass[i]*0.5*(vznew[i]+vzold[i])*(math.sqrt(2.0*kb*TR*gammaR*mass[i]**(-1))*sqrtdt*chizR - gammaR*(znew[i]-zold[i])))	
-			Q += -(mass[i]*0.5*(vxnew[i]+vxold[i])*(math.sqrt(2.0*kb*TR*gammaR*mass[i]**(-1))*sqrtdt*chixR - gammaR*(xnew[i]-xold[i])))
-			Q += -(mass[i]*0.5*(vynew[i]+vyold[i])*(math.sqrt(2.0*kb*TR*gammaR*mass[i]**(-1))*sqrtdt*chiyR - gammaR*(ynew[i]-yold[i])))
-			Q += -(mass[i]*0.5*(vznew[i]+vzold[i])*(math.sqrt(2.0*kb*TR*gammaR*mass[i]**(-1))*sqrtdt*chizR - gammaR*(znew[i]-zold[i])))	
-
-			
-			Qtotalcum[timestep+1]+=Q
-			Qtotal[timestep+1]=QL[timestep+1]+QR[timestep+1]
-			
-			#if timestep>0:
-			#	Qtotal[timestep]+=Qtotal[timestep-1]
-			
+		if dynamics == 'Noneq':
+		# 	#Q = 0
+		# 	i=Lterm
+		# 	QL[timestep+1] += -(mass[i]*0.5*(vxnew[i]+vxold[i])*(math.sqrt(2.0*kb*TL*gammaL*mass[i]**(-1))*sqrtdt*chixL - gammaL*(xnew[i]-xold[i])))
+		# 	QL[timestep+1] += -(mass[i]*0.5*(vynew[i]+vyold[i])*(math.sqrt(2.0*kb*TL*gammaL*mass[i]**(-1))*sqrtdt*chiyL - gammaL*(ynew[i]-yold[i])))
+		# 	QL[timestep+1] += -(mass[i]*0.5*(vznew[i]+vzold[i])*(math.sqrt(2.0*kb*TL*gammaL*mass[i]**(-1))*sqrtdt*chizL - gammaL*(znew[i]-zold[i])))
+		# 	Q += -(mass[i]*0.5*(vxnew[i]+vxold[i])*(math.sqrt(2.0*kb*TL*gammaL*mass[i]**(-1))*sqrtdt*chixL - gammaL*(xnew[i]-xold[i])))
+		# 	Q += -(mass[i]*0.5*(vynew[i]+vyold[i])*(math.sqrt(2.0*kb*TL*gammaL*mass[i]**(-1))*sqrtdt*chiyL - gammaL*(ynew[i]-yold[i])))
+		# 	Q += -(mass[i]*0.5*(vznew[i]+vzold[i])*(math.sqrt(2.0*kb*TL*gammaL*mass[i]**(-1))*sqrtdt*chizL - gammaL*(znew[i]-zold[i])))
+        #
+		# 	i=Rterm
+		# 	QR[timestep+1] += -(mass[i]*0.5*(vxnew[i]+vxold[i])*(math.sqrt(2.0*kb*TR*gammaR*mass[i]**(-1))*sqrtdt*chixR - gammaR*(xnew[i]-xold[i])))
+		# 	QR[timestep+1] += -(mass[i]*0.5*(vynew[i]+vyold[i])*(math.sqrt(2.0*kb*TR*gammaR*mass[i]**(-1))*sqrtdt*chiyR - gammaR*(ynew[i]-yold[i])))
+		# 	QR[timestep+1] += -(mass[i]*0.5*(vznew[i]+vzold[i])*(math.sqrt(2.0*kb*TR*gammaR*mass[i]**(-1))*sqrtdt*chizR - gammaR*(znew[i]-zold[i])))
+		# 	Q += -(mass[i]*0.5*(vxnew[i]+vxold[i])*(math.sqrt(2.0*kb*TR*gammaR*mass[i]**(-1))*sqrtdt*chixR - gammaR*(xnew[i]-xold[i])))
+		# 	Q += -(mass[i]*0.5*(vynew[i]+vyold[i])*(math.sqrt(2.0*kb*TR*gammaR*mass[i]**(-1))*sqrtdt*chiyR - gammaR*(ynew[i]-yold[i])))
+		# 	Q += -(mass[i]*0.5*(vznew[i]+vzold[i])*(math.sqrt(2.0*kb*TR*gammaR*mass[i]**(-1))*sqrtdt*chizR - gammaR*(znew[i]-zold[i])))
+        #
+		#
+		# 	Qtotalcum[timestep+1]+=Q
+		# 	Qtotal[timestep+1]=QL[timestep+1]+QR[timestep+1]
+		#
+		# 	#if timestep>0:
+		# 	#	Qtotal[timestep]+=Qtotal[timestep-1]
+		#
 			Energyarraytotal[timestep+1] = Energy(xnew,ynew,znew,vxnew,vynew,vznew)
-			DeltaE = Energyarraytotal[timestep+1]-Energyarraytotal[0]
-			DeltaEarraycum[timestep+1] += DeltaE  
+		# 	DeltaE = Energyarraytotal[timestep+1]-Energyarraytotal[0]
+		# 	DeltaEarraycum[timestep+1] += DeltaE
 			Energyarray[timestep+1]+=Energyarraytotal[timestep+1]
-			#print 'heat', Q,  'Delta E', Energyarray[timestep+1]-Energyarray[timestep]
-			#print traj, timestep, Q,  'Delta E', DeltaE
+		# 	#print 'heat', Q,  'Delta E', Energyarray[timestep+1]-Energyarray[timestep]
+		# 	#print traj, timestep, Q,  'Delta E', DeltaE
 
 #########################################################################################
 		timestep+=1
@@ -1278,7 +1277,8 @@ i = 0
 while i<tsize:
 	print >> temptotal_file, t[i], float(Tarraytotal[i]/numoftraj)
 	print >> heatcum_file, t[i], Qtotalcum[i]/numoftraj, DeltaEarraycum[i]/numoftraj
-	print >> energyflux_file, t[i], Qtotal[i]/numoftraj, QL[i]/numoftraj, QR[i]/numoftraj, Energyarray[i]/numoftraj
+	# print >> energyflux_file, t[i], Qtotal[i]/numoftraj, QL[i]/numoftraj, QR[i]/numoftraj, Energyarray[i]/numoftraj
+	print >> energyflux_file, t[i], Energyarray[i]/numoftraj
 	i+=1
 	
 i = 0
@@ -1292,3 +1292,16 @@ heatcum_file.close()
 energyflux_file.close()
 
 print("--- %s seconds ---" % (time.time() - start_time))
+
+plt.figure()
+plt.plot(bath_object1.R_sampling)
+
+plt.figure()
+plt.plot(damper1x)
+
+# plt.figure()
+# plt.plot(bathposition1x)
+
+plt.figure()
+plt.plot(t, Energyarray[:-1]/numoftraj)
+plt.show()

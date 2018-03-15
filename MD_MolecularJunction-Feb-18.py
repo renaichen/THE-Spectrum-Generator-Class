@@ -6,13 +6,14 @@ import time
 import numpy as np
 import math
 import random
+import matplotlib.pyplot as plt
 pathname = os.path.dirname(sys.argv[0])
 fullpath = os.path.abspath(pathname)
 #=============================================================================================================
 start_time = time.time()
 #################time parameters###########################
 tBegin=0
-tEnd=0.30 #1 = 48.88882 fs  #simulation time
+tEnd=3 #1 = 48.88882 fs  #simulation time
 dt=	0.001 #0.01 = 0.488882 fs #timestep size
 sqrtdt = np.sqrt(dt)
 t = np.arange(tBegin, tEnd, dt)
@@ -44,15 +45,15 @@ Teff = (gammaL*TL+gammaR*TR)/(gammaL+gammaR) #[K] weighted average of the two ba
 gamma = 0.488882 #for equilbrium NVT dynamics 
 print "Teff", Teff
 equiltime = tEnd/2.#dt #tsize/2
-#dynamics = 'NVT'
-dynamics = 'Noneq' #'NVT','Noneq','NVE'
+dynamics = 'NVE'
+#dynamics = 'Noneq' #'NVT','Noneq','NVE'
 cutoffradius = 15 #[A]
 NeighborListRefreshRate = tsize #tsize means only make neighbor list at first timestep
 TrajOutputRate = 10 #10 if 0.001
 
 
 #import molecular geometry
-molfile = "/Benzene-ring.pdb"
+molfile = "/c2h2-python.pdb"
 
 # how many atoms?
 N = 0
@@ -1292,3 +1293,8 @@ heatcum_file.close()
 energyflux_file.close()
 
 print("--- %s seconds ---" % (time.time() - start_time))
+
+plt.figure()
+plt.plot(Energyarray/numoftraj)
+plt.show()
+
