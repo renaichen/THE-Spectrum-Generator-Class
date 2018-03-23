@@ -12,7 +12,7 @@ class Generator(object):
     anchor bath particle y_l according to the paper: J. Chem. Phys. 69, 2525 (1978)
     """
     def __init__(self, n, omegaD,
-                 mass=1, temperature=1, dt=0.001, t_num=1000, Ntraj=1, sampling_rate=10):
+                 mass=1, temperature=1, dt=0.001, t_num=1000, Ntraj=1, sampling_rate=2):
 
         # set the parameters and constants
         self.n = n
@@ -71,7 +71,7 @@ class Generator(object):
     #     ssptemp = 0.0
     #     scp = 1.0
     #     scptemp = 0.0
-    #     tolerance = 1e-15
+    #     tolerance = 1e-10
     #     while abs((ssp - ssptemp) / ssp) > tolerance or abs((scp - scptemp) / scp) > tolerance:
     #         ssptemp = ssp
     #         scptemp = scp
@@ -94,7 +94,7 @@ class Generator(object):
         self.compute_ap()
         self.compute_bp()
 
-        ut = 0.0
+        # ut = 0.0
         self.ssp = self.sspold + (-self._bp * self.omegaD * self.sspold +
                                     self._ap * self.omegaD * self.scpold) * self.dt
         self.scp = self.scpold + (-self._bp * self.omegaD * self.scpold -
@@ -118,10 +118,33 @@ class Generator(object):
             # so the following x[..., i] should be treated differently than x[..., i-1]
 
             for i in range(self.n / 2, 0, -1):
+                # x[tstep + 1, i - 1] = x[tstep, i - 1] + v[tstep, i - 1] * self.dt
                 x[tstep + 1, i - 1] = x[tstep, i - 1] + v[tstep, i - 1] * self.dt
-                v[tstep + 1, i - 1] = v[tstep, i - 1] + self.omegaD ** 2 * \
-                                                        (x[tstep, i] / np.sqrt(self.dt) - x[tstep, i - 1] -
+                # x[tstep + 1, i - 1] = np.exp(-1. / 5000 * self.t[tstep + 1]) * x[tstep + 1, i - 1]
+                # v[tstep + 1, i - 1] = v[tstep, i - 1] + self.omegaD ** 2 * \
+                #                         (x[tstep, i] - x[tstep, i - 1] -
+                #                             2 * self._bp[i - 1] / self.omegaD * v[tstep, i - 1]) * self.dt
+
+                #---------------------------------------------------
+                # v[tstep + 1, i - 1] = v[tstep, i - 1] + self.omegaD ** 2 * \
+                #                                         (x[tstep, i] / np.sqrt(self.dt) - x[tstep, i - 1] -
+                #                                          2 * self._bp[i - 1] / self.omegaD * v[tstep, i - 1]) * self.dt
+                ##---------------------------------------------------
+
+                ##----- One must use the following condition (not the one above)
+                # to do the none-gaussian velocities deterministically, otherwise it blows up
+                if i == self.n / 2:
+                    v[tstep + 1, i - 1] = v[tstep, i - 1] + self.omegaD ** 2 * \
+                                                        (x[tstep, i]/np.sqrt(self.dt) - x[tstep, i - 1] -
                                                          2 * self._bp[i - 1] / self.omegaD * v[tstep, i - 1]) * self.dt
+                else:
+                    v[tstep + 1, i - 1] = v[tstep, i - 1] + self.omegaD ** 2 * \
+                                                        (x[tstep, i] - x[tstep, i - 1] -
+                                                        2 * self._bp[i - 1] / self.omegaD * v[tstep, i - 1]) * self.dt
+
+
+                # v[tstep + 1, i - 1] = np.exp(-1./6000*self.t[tstep+1])*v[tstep+1, i - 1]
+
             tstep += 1
 
     def random_evolve_vv(self, x, v):
@@ -138,9 +161,24 @@ class Generator(object):
                 a[tstep, i - 1] = - self.omegaD ** 2 * x[tstep, i - 1]
                 x[tstep + 1, i - 1] = x[tstep, i - 1] + v[tstep, i - 1] * self.dt + 0.5 * a[tstep, i - 1] * self.dt ** 2
                 a[tstep + 1, i - 1] = - self.omegaD ** 2 * x[tstep + 1, i - 1]
-                v[tstep + 1, i - 1] = v[tstep, i - 1] + 0.5 * (a[tstep, i - 1] + a[tstep + 1, i - 1]) * self.dt \
-                                      - 2 * self._bp[i - 1] * self.omegaD * v[tstep, i - 1] * self.dt \
-                                      + self.omegaD ** 2 * x[tstep, i] * np.sqrt(self.dt)
+
+                ##------------------------------------------------------------
+                # v[tstep + 1, i - 1] = v[tstep, i - 1] + 0.5 * (a[tstep, i - 1] + a[tstep + 1, i - 1]) * self.dt \
+                #                       - 2 * self._bp[i - 1] * self.omegaD * v[tstep, i - 1] * self.dt \
+                #                       + self.omegaD ** 2 * x[tstep, i] * np.sqrt(self.dt)
+                ##---------------------------------------------------
+
+                ##----- One must use the following condition (not the one above)
+                # to do the none-gaussian velocities deterministically, otherwise it blows up
+                if i == self.n / 2:
+                    v[tstep + 1, i - 1] = v[tstep, i - 1] + 0.5 * (a[tstep, i - 1] + a[tstep + 1, i - 1]) * self.dt \
+                                          - 2 * self._bp[i - 1] * self.omegaD * v[tstep, i - 1] * self.dt \
+                                          + self.omegaD ** 2 * x[tstep, i] * np.sqrt(self.dt)
+                else:
+                    v[tstep + 1, i - 1] = v[tstep, i - 1] + 0.5 * (a[tstep, i - 1] + a[tstep + 1, i - 1]) * self.dt \
+                                          - 2 * self._bp[i - 1] * self.omegaD * v[tstep, i - 1] * self.dt \
+                                          + self.omegaD ** 2 * x[tstep, i] * self.dt
+
             tstep += 1
 
     def random_mult_traj(self):
