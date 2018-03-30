@@ -7,13 +7,13 @@ import Debye_spectrum_3 as ds
 n = 8
 omegaD = 1.
 mass = 32.
-t_num = 100000
+t_num = 10000
 dt1 = 0.01
 Ntraj1 = 1
-temperature = 5000
+temperature = 5
 
 tBegin = 0.0
-tEnd = 500
+tEnd = 50
 dt = 0.01
 
 def rk_4th_n8(sspo, scpo, f, dt):
@@ -76,7 +76,7 @@ n8 = ds.Generator(n=n,
                  )
 
 rand_array = n8.give_me_random_series(dt)
-print n8._coe_rho
+# print n8._coe_rho
 
 points = len(rand_array)
 tArray = np.linspace(tBegin, tEnd, points)
@@ -89,7 +89,7 @@ m1 = 12.0
 omega1 = 0.4
 k12 = m1 * omega1**2
 x10 = 50
-x012 = 2.0
+x012 = 3.0
 traj = 0
 epsilon = 0.3
 sigma = 3.5
@@ -118,15 +118,15 @@ while traj < Ntraj2:
 
     damperR = np.zeros(tsize)
 
-    x1[0] = 57.0
-    xR[0] = 71.0
+    x1[0] = 55.0
+    xR[0] = 70.0
 
     v1[0] = 2.
 
-    ssp10 = np.zeros(4)
-    scp10 = np.zeros(4)
-    ssp1 = np.zeros(4)
-    scp1 = np.zeros(4)
+    # ssp10 = np.zeros(4)
+    # scp10 = np.zeros(4)
+    # ssp1 = np.zeros(4)
+    # scp1 = np.zeros(4)
 
     ap = np.zeros(4)
     bp = np.zeros(4)
@@ -142,8 +142,8 @@ while traj < Ntraj2:
     while tstep < (tsize-1):
 #
         f1old = f1new
-        ssp10 = ssp1
-        scp10 = scp1
+        # ssp10 = ssp1
+        # scp10 = scp1
         # ssp1, scp1, damperR[tstep] = just_get_n8(ssp10, scp10, fR, dt)
         # ssp1, scp1, damperR[tstep] = rk_4th_n8(ssp10, scp10, fR, dt)
         damperR[tstep] = n8.damp_getter(fR)
@@ -195,8 +195,8 @@ timeplot = tArray[1:-1]
 # fitplot = slope * timeplot + b
 
 ##--------------------plottings--------------------------------
-plt.figure()
-plt.plot(n8.R_sampling)
+# plt.figure()
+# plt.plot(n8.R_sampling)
 plt.figure()
 plt.plot(x1)
 plt.figure()

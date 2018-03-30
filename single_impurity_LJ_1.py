@@ -1,32 +1,33 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import Debye_spectrum_3 as ds
+from scipy.fftpack import fft, ifft
 
 
 omegaD = 1
 t_num = 100000
-dt1 = 0.01
-Ntraj1 = 100
+dt1 = 0.001
+Ntraj1 = 1
 sampling = 2
 #------------------------------------------------------
-tBegin = 0
+tBegin = 0.001
 tEnd = 100000
-dt2 = 0.01
+dt2 = 0.001
 
 m1 = 1.0
-k12 = 0.05
+k12 = 0.5
 x012 = 10.0
 traj = 0
 tstep = 0
-epsilon = 0.03
+epsilon = 0.3
 sigma = 2.5
 
 Ntraj2 = 1
 while traj<Ntraj2:
 
-    n8 = ds.Generator(n=4,
+    n8 = ds.Generator(n=8,
                  omegaD=omegaD,
-                 temperature=1,
+                 temperature=0,
                  dt=dt1,
                  t_num=t_num,
                  Ntraj=Ntraj1,
@@ -82,8 +83,8 @@ while traj<Ntraj2:
 
         # U[tstep] = 0.5*k12*(x2[tstep]-x1[tstep]-x012)**2
         U[tstep] = 0.5*k12*(x1[tstep]-x012)**2
-        # U[tstep] += 4 * epsilon * sigma**12 / (x1[tstep+1]-x2[tstep+1])**12\
-        #                 - 4 * epsilon * sigma**6/(x1[tstep+1]-x2[tstep+1])**6
+        # U[tstep] += (4 * epsilon * sigma**12 / (x1[tstep]-x2[tstep])**12\
+        #                 - 4 * epsilon * sigma**6/(x1[tstep]-x2[tstep])**6) * 0.5
         K[tstep] = 0.5*m1*v1[tstep]**2
 
         tstep += 1
@@ -99,18 +100,24 @@ while traj<Ntraj2:
 Utraj /= Ntraj2
 Ktraj /= Ntraj2
 damper_traj /= Ntraj2
+Lambdat = np.delete(Utraj+Ktraj, -1)
+tnofirst = np.delete(tArray,0)
+Lambdat = np.log(Lambdat)
+Lambda = -Lambdat/tnofirst
+Lambda = fft(Lambda)
 
-print n8._coe_rho
+print
 
 ##--------------------plottings--------------------------------
-plt.figure()
-# plt.plot(n8.R_traj[:, 90])
-plt.plot(n8.R_sampling)
+# plt.figure()
+# # plt.plot(n8.R_traj[:, 90])
+# plt.plot(n8.R_sampling)
 # plt.plot(x1)
 # plt.plot(rand_array)
+# plt.figure()
+# plt.plot(damper_traj)
 plt.figure()
-plt.plot(damper_traj)
+plt.plot(Lambda)
 plt.figure()
 plt.plot(Utraj+Ktraj)
-# plt.plot(cor_n8)
 plt.show()

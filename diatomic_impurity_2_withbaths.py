@@ -7,7 +7,7 @@ import time
 nL = 8
 omegaDL = 5.
 massL = 32.
-t_numL = 100000
+t_numL = 300000
 dt1L = 0.01
 Ntraj1L = 1
 temperatureL = 500.0
@@ -15,13 +15,13 @@ temperatureL = 500.0
 nR = 8
 omegaDR = 5.
 massR = 32.
-t_numR = 100000
+t_numR = 300000
 dt1R = 0.01
 Ntraj1R = 1
 temperatureR = 10.0
 
 tBegin = 0.0
-tEnd = 500
+tEnd = 1500
 dt = 0.01
 kB = 0.00198
 sp_objL = ds.Generator(n=nL,
@@ -57,25 +57,29 @@ K2traj = np.zeros(tsize)
 powerLtraj = np.zeros(tsize)
 powerRtraj = np.zeros(tsize)
 power12traj = np.zeros(tsize)
+powerLsqtraj = np.zeros(tsize)
+powerRsqtraj = np.zeros(tsize)
+power12sqtraj = np.zeros(tsize)
 damper_trajL = np.zeros(tsize)
 damper_trajR = np.zeros(tsize)
 
 m1 = 12.0
 m2 = 12.0
+mu = m1 * m2 / (m1 + m2)
 omega1 = 2.5
-k12 = m1 * omega1**2
+k12 = mu * omega1**2
 # x10 = 50
 x012 = 1.5
 traj = 0
 epsilon = 0.3
 sigma = 3.5
 AL = 23 * 1e5  #  1eV = 23kcal/mol
-alphaL = 5e0
+alphaL = 5e-0
 AR = 23 * 1e5  #  1eV = 23kcal/mol
-alphaR = 5e0
+alphaR = 5e-0
 
 start_time = time.time()
-Ntraj2 = 10
+Ntraj2 = 300
 while traj < Ntraj2:
     sp_objL = ds.Generator(n=nL,
                            mass=massL,
@@ -118,6 +122,9 @@ while traj < Ntraj2:
     powerL = np.zeros(tsize)
     powerR = np.zeros(tsize)
     power12 = np.zeros(tsize)
+    powerLsq = np.zeros(tsize)
+    powerRsq = np.zeros(tsize)
+    power12sq = np.zeros(tsize)
     term1 = np.zeros(tsize)
     term2 = np.zeros(tsize)
 
@@ -183,17 +190,13 @@ while traj < Ntraj2:
         # term2[tstep + 1] = (UintL[tstep + 1] - UintL[tstep]) / dt
 
         if tstep > 0:
-            powerL[tstep] = -0.5 * fL * ((xL[tstep + 1] - xL[tstep]) / dt + v1[tstep])
+            powerL[tstep] = 0.5 * fL * ((xL[tstep + 1] - xL[tstep]) / dt + v1[tstep])
             powerR[tstep] = 0.5 * fR * ((xR[tstep + 1] - xR[tstep]) / dt + v2[tstep])
-            # powerL[tstep] = -0.5 * fint[tstep] * v1[tstep] - fL * (xL[tstep] - xL[tstep-1]) / dt
-            # powerR[tstep] = 0.5 * fint[tstep] * v2[tstep] - fR * (xR[tstep] - xR[tstep-1]) / dt
-            # powerL[tstep] = fint[tstep] * v1[tstep] + (UintL[tstep] - UintL[tstep-1]) / dt
-            # powerR[tstep] = -fint[tstep] * v2[tstep] + (UintR[tstep] - UintR[tstep-1]) / dt
-            # powerL[tstep] = f1old * v1[tstep] + 0.5 * (UintL[tstep] - UintL[tstep - 1])/dt
-            # powerR[tstep] = f1old * v1[tstep] + 0.5 * (UintR[tstep] - UintR[tstep - 1])/dt
             power12[tstep] = 0.5 * fint[tstep] * (v2[tstep] + v1[tstep])
+            powerLsq[tstep] = powerL[tstep] * powerL[tstep]
+            powerRsq[tstep] = powerR[tstep] * powerR[tstep]
+            power12sq[tstep] = power12[tstep] * power12[tstep]
             term1[tstep] = fint[tstep] * v1[tstep]
-            term2[tstep] = (xL[tstep] - xL[tstep - 1]) / dt
 
         # U[tstep] += 4 * epsilon * sigma**12 / (x1[tstep]-x2[tstep])**12\
         #                 - 4 * epsilon * sigma**6/(x1[tstep]-x2[tstep])**6
@@ -211,6 +214,9 @@ while traj < Ntraj2:
     powerLtraj += powerL
     powerRtraj += powerR
     power12traj += power12
+    powerLsqtraj += powerLsq
+    powerRsqtraj += powerRsq
+    power12sqtraj += power12sq
     # damper_traj += damper
 
     traj += 1
@@ -223,6 +229,9 @@ K2traj /= Ntraj2
 powerLtraj /= Ntraj2
 powerRtraj /= Ntraj2
 power12traj /= Ntraj2
+powerLsqtraj /= Ntraj2
+powerRsqtraj /= Ntraj2
+power12sqtraj /= Ntraj2
 # damper_traj /= Ntraj2
 Et = Utraj[1:-1] + Ktraj[1:-1]  # log(0) is bad and should be avoided
 timeplot = tArray[1:-1]
@@ -233,26 +242,52 @@ timeplot = tArray[1:-1]
 
 ##----------
 run_time = time.time() - start_time
-print 'run time is: ', run_time
-NN = 30000
+print 'run time is: ', run_time / 60.
+NN = 50000
 # Ksteady = Ktraj[30000:]
 # Kaver = np.sum(Ksteady)/len(Ksteady)
 # print Kaver
 K1steady = K1traj[NN:]
-K1aver = np.sum(K1steady)/len(K1steady)
-print K1aver * 2 / kB
+T1aver = np.mean(K1steady) * 2 / kB
+T1std = np.std(K1steady) * 2 / kB
+print 'T1 = ', T1aver, T1std
 K2steady = K2traj[NN:]
-K2aver = np.sum(K2steady)/len(K2steady)
-print K2aver * 2 / kB
+T2aver = np.mean(K2steady) * 2 / kB
+T2std = np.std(K2steady) * 2 / kB
+print 'T2 = ', T2aver, T2std
+
 PsteadyL = powerLtraj[NN:]
-PaverL = np.sum(PsteadyL)/len(PsteadyL)
-print PaverL
+PsqsteadyL = powerLsqtraj[NN:]
+JLaver = np.mean(PsteadyL)
+JLstd = np.std(PsteadyL)
+JLstd_true = np.sqrt(np.mean(PsqsteadyL) - JLaver**2)
+print 'heatL = ', JLaver, JLstd, JLstd_true
 Psteady12 = power12traj[NN:]
-Paver12 = np.sum(Psteady12)/len(Psteady12)
-print Paver12
+Psqsteady12 = power12sqtraj[NN:]
+J12aver = np.mean(Psteady12)
+J12std = np.std(Psteady12)
+J12std_true = np.sqrt(np.mean(Psqsteady12) - J12aver**2)
+print 'heat12 = ', J12aver, J12std, J12std_true
 PsteadyR = powerRtraj[NN:]
-PaverR = np.sum(PsteadyR)/len(PsteadyR)
-print PaverR
+PsqsteadyR = powerRsqtraj[NN:]
+JRaver = np.mean(PsteadyR)
+JRstd = np.std(PsteadyR)
+JRstd_true = np.sqrt(np.mean(PsqsteadyR) - JRaver**2)
+print 'heatR = ', JRaver, JRstd, JRstd_true
+
+
+##-----------write-data-out---------
+filename = time.strftime('diatomic-%m-%d-%H%M.txt')
+with open(filename, "w") as f:
+    f.write("trajectory number: %d\n" %(Ntraj2))
+    f.write("time_step: %f\n" %(dt))
+    f.write("number of steps: %d\n" %(t_numL/2))
+    f.write("TL = %d, TR = %d\n" %(temperatureL, temperatureR))
+    # f.write("T1 = %f\n" %(T1aver))
+    # f.write("T2 = %f\n" %(T2aver))
+    f.write("JL = %f, STDJL = %f\n" %(JLaver, JLstd_true))
+    f.write("J12 = %f, STDJ12 = %f\n" %(J12aver, J12std_true))
+    f.write("JR = %f, STDJR = %f\n" %(JRaver, JRstd_true))
 
 
 ##--------------------plottings--------------------------------
@@ -260,32 +295,36 @@ print PaverR
 # plt.plot(rand_arrayL)
 # plt.plot(damperR)
 # plt.plot(rand_arrayR)
-plt.figure()
-plt.plot(x1)
-plt.plot(x2)
-plt.plot(xL)
-plt.plot(xR)
+# plt.figure()
+# plt.plot(x1)
+# plt.plot(x2)
+# plt.plot(xL)
+# plt.plot(xR)
+# plt.figure()
+# plt.plot(x1-xL)
+# plt.plot(x2-xR)
 # plt.plot(v1)
 # plt.plot(v2)
 # # plt.plot(timeplot, np.log(Et))
 # # plt.plot(timeplot, fitplot)
+# plt.figure()
+# plt.plot(K1traj)
+# plt.plot(K2traj)
 plt.figure()
-# plt.plot(x1-xL)
-# plt.plot(x2-xR)
 plt.plot(Et)
 # plt.plot(Ktraj)
 # plt.plot(Utraj)
-# plt.figure()
-# # plt.plot(power12traj)
-# # plt.plot(powerLtraj)
+plt.figure()
+plt.plot(power12traj)
+# plt.plot(powerLtraj)
 # plt.plot(powerRtraj)
 # plt.plot(powerLtraj-powerRtraj)
 # plt.figure()
 # plt.plot(term1)
 # plt.plot(term2)
-plt.figure()
-plt.plot(fLt)
-plt.plot(fRt)
+# plt.figure()
+# plt.plot(fLt)
+# plt.plot(fRt)
 plt.show()
 
 

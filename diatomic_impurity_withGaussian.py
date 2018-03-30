@@ -9,10 +9,10 @@ import random
 kB = 0.001987
 gammaL = 1.0
 gammaR = 1.0
-Tl = 10.
-Tr = 20.
+Tl = 500.
+Tr = 10.
 tBegin = 0.0
-tEnd = 50
+tEnd = 500
 dt = 0.01
 
 tArray = np.arange(tBegin, tEnd, dt)
@@ -34,7 +34,7 @@ x012 = 1.5
 traj = 0
 
 start_time = time.time()
-Ntraj2 = 100
+Ntraj2 = 120
 while traj < Ntraj2:
 
     x1 = np.zeros(tsize)
@@ -128,9 +128,9 @@ Et = Utraj[1:-1] + Ktraj[1:-1]  # log(0) is bad and should be avoided
 
 ##----------
 run_time = time.time() - start_time
-print 'run time is: ', run_time
+print 'run time is: ', run_time / 60
 
-NN = 2000
+NN = tsize / 2
 # Ksteady = Ktraj[3000:]
 # Kaver = np.sum(Ksteady)/len(Ksteady)
 # print Kaver / kB
@@ -142,7 +142,7 @@ K2aver = np.sum(K2steady)/len(K2steady)
 print K2aver * 2 / kB
 PsteadyL = powerLtraj[NN:]
 PaverL = np.sum(PsteadyL)/len(PsteadyL)
-print PaverL
+print PaverL, np.std(PsteadyL), np.std(PsteadyL) / np.sqrt(NN)
 Psteady12 = power12traj[NN:]
 Paver12 = np.sum(Psteady12)/len(Psteady12)
 print Paver12
