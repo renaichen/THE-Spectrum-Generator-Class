@@ -1,7 +1,10 @@
+import sys
+
 import numpy as np
 import matplotlib.pyplot as plt
-import Debye_spectrum_3 as ds
 import time
+
+import Debye_spectrum_3 as ds
 
 start_time = time.time()
 #------------------------------------------------------
@@ -79,7 +82,7 @@ alphaL = 5e0
 AR = 1 * 1e6  #  1eV = 23kcal/mol
 alphaR = 5e0
 
-Ntraj2 = 1000
+Ntraj2 = 1
 while traj < Ntraj2:
     sp_objL = ds.Generator(n=nL,
                            mass=massL,
@@ -131,10 +134,10 @@ while traj < Ntraj2:
     damperL = np.zeros(tsize)
     damperR = np.zeros(tsize)
 
-    xL[0] = 46.7
+    xL[0] = float(sys.argv[1])
     x1[0] = 49.
     x2[0] = 51
-    xR[0] = 53.3
+    xR[0] = float(sys.argv[2])
 
     v1[0] = 0.
     v2[0] = 0.0
