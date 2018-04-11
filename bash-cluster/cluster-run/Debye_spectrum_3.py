@@ -1,8 +1,5 @@
 import numpy as np
-# from scipy.integrate import odeint
 import random
-import matplotlib.pyplot as plt
-# from scipy.fftpack import fft, ifft
 
 
 class Generator(object):
