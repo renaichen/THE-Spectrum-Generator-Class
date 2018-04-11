@@ -1,7 +1,6 @@
 import sys
 
 import numpy as np
-import matplotlib.pyplot as plt
 import time
 
 import Debye_spectrum_3 as ds
@@ -324,43 +323,4 @@ with open(filename, "w") as f:
 
 filename2 = time.strftime('heatflux-diatomic-%m-%d-%H%M.txt')
 np.savetxt(filename2, np.c_[PsteadyL, Psteady12, PsteadyR])
-
-##--------------------plottings--------------------------------
-# plt.figure()
-# plt.plot(rand_arrayL)
-# plt.plot(damperR)
-# plt.plot(rand_arrayR)
-plt.figure()
-plt.plot(x1)
-plt.plot(x2)
-plt.plot(xL)
-plt.plot(xR)
-# plt.figure()
-# plt.plot(x1-xL)
-# plt.plot(x2-xR)
-# plt.plot(v1)
-# plt.plot(v2)
-# # plt.plot(timeplot, np.log(Et))
-# # plt.plot(timeplot, fitplot)
-# plt.figure()
-# plt.plot(K1traj)
-# plt.plot(K2traj)
-plt.figure()
-plt.plot(Et)
-# plt.plot(Ktraj)
-# plt.plot(Utraj)
-plt.figure()
-# plt.plot(power12traj)
-plt.plot(Psteady12)
-# plt.plot(powerLtraj)
-# plt.plot(powerRtraj)
-# plt.plot(powerLtraj-powerRtraj)
-# plt.figure()
-# plt.plot(term1)
-# plt.plot(term2)
-# plt.figure()
-# plt.plot(fLt)
-# plt.plot(fRt)
-plt.show()
-
 
