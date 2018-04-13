@@ -2,7 +2,7 @@ import numpy as np
 # from scipy.integrate import odeint
 import random
 import matplotlib.pyplot as plt
-from scipy.fftpack import fft, ifft
+#from scipy.fftpack import fft, ifft
 
 
 class Generator(object):
@@ -80,32 +80,59 @@ class Generator(object):
     #         # print abs((ssp - ssptemp) / ssp)
     #     return ssp, scp,
     #
+
     # def damp_getter(self, ft):   # Only even case is taken into account for now
-    #     self.get_coefficients()
-    #     ssp = np.zeros(self.n//2)
-    #     scp = np.zeros(self.n//2)
-    #     ut = 0.0
-    #     for i in range(self.n//2):
-    #         ssp[i], scp[i] = self.damp_evolve_euler(self._bp[i], self._ap[i], ft)
-    #         ut += 2 * self._ap[i] * self._bp[i] * ssp[i] + (self._bp[i]**2 - self._ap[i]**2) * scp[i]
+    #     self.compute_ap()
+    #     self.compute_bp()
+
+    #     # ut = 0.0
+    #     self.ssp = self.sspold + (-self._bp * self.omegaD * self.sspold +
+    #                                 self._ap * self.omegaD * self.scpold) * self.dt
+    #     self.scp = self.scpold + (-self._bp * self.omegaD * self.scpold -
+    #                                 self._ap * self.omegaD * self.sspold + ft) * self.dt
+    #     # ut += 2 * self._ap[i] * self._bp[i] * ssp[i] + (self._bp[i]**2 - self._ap[i]**2) * scp[i]
+    #     uttwice = 2 * self._ap * self._bp * self.ssp + (self._bp**2 - self._ap**2) * self.scp
+    #     ut = np.sum(uttwice[: self.n//2])
+    #     self.sspold = self.ssp
+    #     self.scpold = self.scp
+    #     # print self.sspold
     #     return ut * (1.0/(self.mass * self.omegaD * self._sigma))
 
     def damp_getter(self, ft):   # Only even case is taken into account for now
+        """
+        Trying to implement 4th-order Runge-Kutta method
+        """
         self.compute_ap()
         self.compute_bp()
+        dssp1 = np.zeros(self.n)
+        dssp2 = np.zeros(self.n)
+        dssp3 = np.zeros(self.n)
+        dssp4 = np.zeros(self.n)
+        dscp1 = np.zeros(self.n)
+        dscp2 = np.zeros(self.n)
+        dscp3 = np.zeros(self.n)
+        dscp4 = np.zeros(self.n)
 
-        # ut = 0.0
-        self.ssp = self.sspold + (-self._bp * self.omegaD * self.sspold +
-                                    self._ap * self.omegaD * self.scpold) * self.dt
-        self.scp = self.scpold + (-self._bp * self.omegaD * self.scpold -
-                                    self._ap * self.omegaD * self.sspold + ft) * self.dt
-        # ut += 2 * self._ap[i] * self._bp[i] * ssp[i] + (self._bp[i]**2 - self._ap[i]**2) * scp[i]
+        dssp1 = (-self._bp * self.omegaD * self.sspold + self._ap * self.omegaD * self.scpold) * self.dt
+        dscp1 = (-self._bp * self.omegaD * self.scpold - self._ap * self.omegaD * self.sspold + ft) * self.dt
+        dssp2 = (-self._bp * self.omegaD * (self.sspold + 0.5 * dssp1) +
+                        self._ap * self.omegaD * (self.scpold + 0.5 * dscp1)) * self.dt
+        dscp2 = (-self._bp * self.omegaD * (self.scpold + 0.5 * dscp1) -
+                        self._ap * self.omegaD * (self.sspold + 0.5 * dssp1) + ft) * self.dt
+        dssp3 = (-self._bp * self.omegaD * (self.sspold + 0.5 * dssp2) +
+                    self._ap * self.omegaD * (self.scpold + 0.5 * dscp2)) * self.dt
+        dscp3 = (-self._bp * self.omegaD * (self.scpold + 0.5 * dscp2) -
+                    self._ap * self.omegaD * (self.sspold + 0.5 * dssp2) + ft) * self.dt
+        dssp4 = (-self._bp * self.omegaD * (self.sspold + dssp3) +
+                    self._ap * self.omegaD * (self.scpold + dscp3)) * self.dt
+        dscp4 = (-self._bp * self.omegaD * (self.scpold + dscp3) -
+                    self._ap * self.omegaD * (self.sspold + dssp3) + ft) * self.dt
+        self.ssp = self.sspold + 1 / 6.0 * (dssp1 + 2 * dssp2 + 2 * dssp3 + dssp4)
+        self.scp = self.scpold + 1 / 6.0 * (dscp1 + 2 * dscp2 + 2 * dscp3 + dscp4)
         uttwice = 2 * self._ap * self._bp * self.ssp + (self._bp**2 - self._ap**2) * self.scp
         ut = np.sum(uttwice[: self.n//2])
-
         self.sspold = self.ssp
         self.scpold = self.scp
-        # print self.sspold
         return ut * (1.0/(self.mass * self.omegaD * self._sigma))
 
     def random_evolve_euler(self, x, v):
@@ -190,7 +217,7 @@ class Generator(object):
             traj = 0
             while traj<self.Ntraj:
                 """
-                zz is used to represent the Z matrix that is decomposed from the set of 2nd-DEs, 
+                zz is used to represent the Z matrix that is decomposed from the set of 2nd-DEs,
                 dzdt is just the derivative elements of that
                 """
                 zz = np.zeros((self.t_num, self.n / 2 + 1))
@@ -253,17 +280,17 @@ def generate_autocorrelation(seq):
 
     return correlation
 
-def fourier_transform(seq, deltat):
-    N = len(seq)
-    # xf = np.linspace(0, 1/(2*deltat), N//2)
-    xf = np.linspace(0, np.pi / deltat, N // 2)
-    # The normalization for omega is 2pi/deltat,
-    # because we use half of the overall points, so we h
-    yf = fft(seq)
+# def fourier_transform(seq, deltat):
+#     N = len(seq)
+#     # xf = np.linspace(0, 1/(2*deltat), N//2)
+#     xf = np.linspace(0, np.pi / deltat, N // 2)
+#     # The normalization for omega is 2pi/deltat,
+#     # because we use half of the overall points, so we h
+#     yf = fft(seq)
 
-    # return xf, 2.0 / N * np.abs(yf[0: N // 2])
-    # return xf, np.abs(yf[0: N // 2]) / np.abs(yf[0])
-    return xf, yf[0: N // 2].real / yf[0].real
+#     # return xf, 2.0 / N * np.abs(yf[0: N // 2])
+#     # return xf, np.abs(yf[0: N // 2]) / np.abs(yf[0])
+#     return xf, yf[0: N // 2].real / yf[0].real
 
 #=====================================================================
 
